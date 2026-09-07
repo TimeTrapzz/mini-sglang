@@ -23,7 +23,7 @@ To scale performance across multiple GPUs, Mini-SGLang supports Tensor Paralleli
 Our framework currently supports the following dense model architectures:
 
 - [`Llama-3`](https://huggingface.co/collections/meta-llama/llama-31) series
-- [`Qwen-3`](https://huggingface.co/collections/Qwen/qwen3) series (including MoE)
+- [`Qwen-3`](https://huggingface.co/collections/Qwen/qwen3) series (MoE requires CUDA)
 - [`Qwen-2.5`](https://huggingface.co/collections/Qwen/qwen25) series
 
 ## Chunked Prefill
@@ -38,11 +38,13 @@ You can specify the page size of the system using the `--page-size` argument.
 
 Mini-SGLang integrates high-performance attention kernels, including [`FlashAttention`](https://github.com/Dao-AILab/flash-attention) (`fa`), [`FlashInfer`](https://github.com/flashinfer-ai/flashinfer) (`fi`) and [`TensorRT-LLM fmha`](https://github.com/NVIDIA/TensorRT-LLM) (`trtllm`). It supports using different backends for the prefill and decode phases to maximize efficiency. For example, on NVIDIA Hopper GPUs, `FlashAttention 3` is used for prefill and `FlashInfer` for decode by default.
 
+ROCm uses AMD's API-compatible FlashInfer package and the `fi` backend for both phases.
+
 You can specify the backend using the `--attn` argument. If two values are provided (e.g., `--attn fa,fi`), the first specifies the prefill backend and the second the decode backend. Note that some attention backend might override the user-provided page size (e.g. `trtllm` only supports page size 16,32,64).
 
-## CUDA Graph
+## GPU Graph
 
-To minimize CPU launch overhead during decoding, Mini-SGLang supports capturing and replaying CUDA graphs. This feature is enabled by default. The maximum batch size for CUDA graph capture can be set with `--cuda-graph-max-bs n`. Setting `n` to `0` disables this feature.
+To minimize CPU launch overhead during decoding, Mini-SGLang supports capturing and replaying CUDA or HIP graphs. This feature is enabled by default. The maximum batch size for graph capture can be set with `--cuda-graph-max-bs n`. Setting `n` to `0` disables this feature.
 
 ## Radix Cache
 

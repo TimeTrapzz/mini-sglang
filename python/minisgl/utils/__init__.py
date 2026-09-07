@@ -10,6 +10,7 @@ from .mp import (
     ZmqPushQueue,
     ZmqSubQueue,
 )
+from .platform import is_rocm
 from .registry import Registry
 from .torch_utils import nvtx_annotate, torch_dtype
 
@@ -21,6 +22,7 @@ __all__ = [
     "is_arch_supported",
     "is_sm90_supported",
     "is_sm100_supported",
+    "is_rocm",
     "call_if_main",
     "div_even",
     "div_ceil",

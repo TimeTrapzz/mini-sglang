@@ -4,6 +4,8 @@ import functools
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
+from .platform import is_rocm
+
 if TYPE_CHECKING:
     import torch
 
@@ -21,9 +23,12 @@ def torch_dtype(dtype: torch.dtype):
 
 
 def nvtx_annotate(name: str, layer_id_field: str | None = None):
-    import torch.cuda.nvtx as nvtx
-
     def decorator(fn):
+        if is_rocm():
+            return fn
+
+        import torch.cuda.nvtx as nvtx
+
         @functools.wraps(fn)
         def wrapper(self, *args, **kwargs):
             display_name = name

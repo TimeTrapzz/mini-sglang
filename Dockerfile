@@ -22,14 +22,13 @@ ENV PATH="/root/.local/bin:${PATH}"
 WORKDIR /app
 
 # Copy all source files (editable install requires source to exist)
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 COPY python/ ./python/
 
 # Create venv and install dependencies
 RUN uv venv --python=python${PYTHON_VERSION} /app/.venv \
     && . /app/.venv/bin/activate \
-    && uv pip install -e . \
-    && uv pip install torch-c-dlpack-ext
+    && uv pip install -e ".[cuda]"
 
 # Runtime stage
 FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} AS runtime

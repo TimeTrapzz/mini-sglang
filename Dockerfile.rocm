@@ -1,0 +1,26 @@
+ARG BASE_IMAGE=rocm/flashinfer:flashinfer-0.5.3.amd1_rocm7.2_ubuntu24.04_py3.12_pytorch2.9.1
+FROM ${BASE_IMAGE}
+
+WORKDIR /app
+
+COPY pyproject.toml README.md ./
+COPY python/ ./python/
+
+# amd.2 fixes BF16 and GQA correctness issues in the image's amd.1 build.
+RUN python -m pip install --no-cache-dir --upgrade \
+        "amd-flashinfer==0.5.3+amd.2" \
+        --index-url https://pypi.amd.com/simple \
+    && python -m pip install --no-cache-dir -e ".[rocm]"
+
+RUN mkdir -p /app/.cache/huggingface /app/.cache/flashinfer
+
+ENV ROCM_HOME=/opt/rocm
+ENV ROCM_PATH=/opt/rocm
+ENV PYTHONUNBUFFERED=1
+ENV HF_HOME=/app/.cache/huggingface
+ENV FLASHINFER_WORKSPACE_BASE=/app/.cache/flashinfer
+
+EXPOSE 1919
+
+ENTRYPOINT ["python", "-m", "minisgl"]
+CMD ["--help"]

@@ -13,7 +13,7 @@ Mini-SGLang is designed as a distributed system to handle Large Language Model (
 
 ### Data Flow
 
-The components communicate using **ZeroMQ (ZMQ)** for control messages and **NCCL** (via `torch.distributed`) for heavy tensor data exchange between GPUs.
+The components communicate using **ZeroMQ (ZMQ)** for control messages and **NCCL/RCCL** (via `torch.distributed`) for heavy tensor data exchange between GPUs.
 
 ![Process overview diagram](https://lmsys.org/images/blog/minisgl/design.drawio.png)
 
@@ -39,11 +39,11 @@ The source code is located in `python/minisgl`. Here is a breakdown of the modul
 - `minisgl.attention`: Provides interface of attention Backends and implements backends of `flashattention` and `flashinfer`. They are called by `AttentionLayer` and use metadata stored in `Context`.
 - `minisgl.kvcache`: Provides interface of KVCache pool and KVCache manager, and implements `MHAKVCache`, `NaiveCacheManager` and `RadixCacheManager`.
 - `minisgl.utils`: Provides a collection of utilities, including logger setup and wrappers around zmq.
-- `minisgl.engine`: Implements `Engine` class, which is a TP worker on a single process. It manages the model, context, KVCache, attention backend and cuda graph replaying.
+- `minisgl.engine`: Implements `Engine` class, which is a TP worker on a single process. It manages the model, context, KVCache, attention backend and GPU graph replaying.
 - `minisgl.message`: Defines messages exchanged (in zmq) between api_server, tokenizer, detokenizer and scheduler. All message types support automatic serialization and deserialization.
 - `minisgl.scheduler`: Implements `Scheduler` class, which runs on each TP worker process and manages the corresponding `Engine`. The rank 0 scheduler receives msgs from tokenizer, communicates with scheduler on other TP workers, and sends msgs to detokenizer.
 - `minisgl.server`: Defines cli arguments and `launch_server` which starts all the subprocesses of Mini-SGLang. Also implements a FastAPI server in `minisgl.server.api_server` acting as a frontend, providing endpoints such as `/v1/chat/completions`.
 - `minisgl.tokenizer`: Implements `tokenize_worker` function which handles tokenization and detokenization requests.
 - `minisgl.llm`: Provides class `LLM` as a python interface to interact with the Mini-SGLang system easily.
-- `minisgl.kernel`: Implements custom CUDA kernels, supported by `tvm-ffi` for python binding and jit interface.
+- `minisgl.kernel`: Implements custom CUDA kernels and portable PyTorch fallbacks, with `tvm-ffi` providing Python bindings and the JIT interface.
 - `minisgl.benchmark`: Benchmark utilities.

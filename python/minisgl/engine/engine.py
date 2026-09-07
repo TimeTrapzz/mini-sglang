@@ -11,7 +11,14 @@ from minisgl.kvcache import create_kvcache_pool
 from minisgl.layers import set_rope_device
 from minisgl.models import create_model, load_weight
 from minisgl.moe import create_moe_backend
-from minisgl.utils import div_even, init_logger, is_sm90_supported, is_sm100_supported, torch_dtype
+from minisgl.utils import (
+    div_even,
+    init_logger,
+    is_rocm,
+    is_sm90_supported,
+    is_sm100_supported,
+    torch_dtype,
+)
 
 from .config import EngineConfig
 from .graph import GraphRunner, get_free_memory, mem_GB
@@ -219,8 +226,27 @@ def _adjust_config(config: EngineConfig):
     def override(attr: str, value: Any):  # this is dangerous, use with caution
         object.__setattr__(config, attr, value)
 
+    rocm = is_rocm()
+    if rocm:
+        if config.model_config.is_moe:
+            raise NotImplementedError(
+                "ROCm currently supports dense models only; the fused MoE path depends on "
+                "CUDA-only sgl-kernel operators."
+            )
+        if config.attention_backend != "auto" and any(
+            backend != "fi" for backend in config.attention_backend.split(",")
+        ):
+            raise ValueError("ROCm supports the FlashInfer ('fi') attention backend only.")
+        if config.use_pynccl:
+            override("use_pynccl", False)
+            logger.warning_rank0("PyNCCL is unavailable on ROCm; using torch.distributed/RCCL")
+
     if config.attention_backend == "auto":
-        backend = "trtllm" if is_sm100_supported() else ("fa,fi" if is_sm90_supported() else "fi")
+        backend = (
+            "fi"
+            if rocm
+            else ("trtllm" if is_sm100_supported() else ("fa,fi" if is_sm90_supported() else "fi"))
+        )
         override("attention_backend", backend)
         logger.info_rank0(f"Auto-selected attention backend: {config.attention_backend}")
 

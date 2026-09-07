@@ -3,6 +3,8 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING
 
+from minisgl.utils import is_rocm
+
 from .utils import KernelConfig, load_jit, make_cpp_args
 
 if TYPE_CHECKING:
@@ -37,6 +39,12 @@ def store_cache(
     num_tokens = k_cache.shape[0]
     k_cache = k_cache.view(num_tokens, -1)
     v_cache = v_cache.view(num_tokens, -1)
+    if is_rocm():
+        indices = indices.long()
+        k_cache.index_copy_(0, indices, k.view(k.shape[0], -1))
+        v_cache.index_copy_(0, indices, v.view(v.shape[0], -1))
+        return
+
     element_size = k_cache.shape[1] * k_cache.element_size()
     module = _jit_store_module(element_size)
     module.launch(k_cache, v_cache, indices, k, v)

@@ -3,6 +3,8 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING, Tuple
 
+from minisgl.utils import is_rocm
+
 from .utils import KernelConfig, load_jit, make_cpp_args
 
 if TYPE_CHECKING:
@@ -10,6 +12,25 @@ if TYPE_CHECKING:
     from tvm_ffi import Module
 
 DEFAULT_INDEX_KERNEL_CONFIG = KernelConfig(num_threads=128, max_occupancy=1, use_pdl=False)
+
+
+def _indexing_torch(
+    weights: torch.Tensor,
+    indices: torch.Tensor,
+    output: torch.Tensor,
+    vocab_range: Tuple[int, int] | None,
+) -> torch.Tensor:
+    if vocab_range is None:
+        output.copy_(weights.index_select(0, indices.long()))
+        return output
+
+    start, length = vocab_range
+    local_indices = indices - start
+    valid = (local_indices >= 0) & (local_indices < length)
+    local_indices = local_indices.masked_fill(~valid, 0)
+    output.copy_(weights.index_select(0, local_indices.long()))
+    output.masked_fill_(~valid.unsqueeze(1), 0)
+    return output
 
 
 @functools.cache
@@ -37,6 +58,9 @@ def indexing(
 ) -> torch.Tensor:
     if output is None:
         output = weights.new_empty(indices.shape[0], weights.shape[1])
+
+    if is_rocm():
+        return _indexing_torch(weights, indices, output, vocab_range)
 
     element_size = weights.shape[1] * weights.element_size()
     if element_size % 2048 == 0:

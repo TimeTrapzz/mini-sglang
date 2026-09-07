@@ -27,19 +27,26 @@ dependencies = [
     "modelscope",
     "torch<2.10.0",
     "transformers>=4.56.0,<=4.57.3",
-    "flashinfer-python>=0.5.3",
     "pyzmq",
     "uvicorn",
     "fastapi",
     "prompt_toolkit",
     "openai",
-    "apache-tvm-ffi>=0.1.4",
-    "sgl_kernel>=0.3.17.post1",
-    "quack-kernels",
 ]
 
 [project.optional-dependencies]
+cuda = [
+    "apache-tvm-ffi>=0.1.13,<0.2",
+    "flashinfer-python>=0.5.3",
+    "sgl_kernel>=0.3.17.post1",
+    "quack-kernels",
+    "torch-c-dlpack-ext",
+]
+rocm = [
+    "amd-flashinfer==0.5.3+amd.2",
+]
 dev = [
+    "apache-tvm-ffi>=0.1.13,<0.2",
     "pytest>=6.0",
     "pytest-cov>=2.0",
     "black>=22.0",
@@ -50,6 +57,17 @@ dev = [
     "matplotlib>=3.10.5",
     "pyarrow",
 ]
+
+[tool.uv]
+conflicts = [[{ extra = "cuda" }, { extra = "rocm" }]]
+
+[[tool.uv.index]]
+name = "amd"
+url = "https://pypi.amd.com/simple"
+explicit = true
+
+[tool.uv.sources]
+amd-flashinfer = { index = "amd" }
 
 [tool.setuptools]
 include-package-data = true
