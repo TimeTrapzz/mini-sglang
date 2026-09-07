@@ -174,6 +174,26 @@ python -m minisgl --model "Qwen/Qwen3-0.6B" --shell
 
 You can also use `/reset` to clear the chat history.
 
+### 5. SID Recommendation
+
+This fork includes a dedicated catalog-constrained recommendation runtime,
+inspired by [FlashRec](https://github.com/sohu-mptc/FlashRec). It adds wide beam
+search, a restricted LM head, shared beam KV indices, prefix-aware batching,
+decode graphs, ranked API responses, and opt-in FP8 and fused Triton kernels.
+
+```bash
+python -m minisgl.recommendation \
+    --model /path/to/your/sid-model --catalog catalog.json \
+    --beam-width 128 --max-requests 4
+```
+
+Use a model trained to generate the catalog's SID tokens. The recommendation
+runtime targets one GPU and dense models; BF16 is the default. It uses the same
+**Python 3.12 / Torch 2.9.x / ROCm 6.4 / amd-flashinfer 0.5.3+amd.2** environment.
+The new GPU paths have not yet been executed on gfx942. See
+[Recommendation guide](docs/recommendation.md) for catalog format, score semantics,
+offline usage, optional kernels and validation commands.
+
 ## Benchmark
 
 ### Offline inference

@@ -72,7 +72,9 @@ def _get_expert_stack_info(key: str) -> tuple[str, int] | None:
     return f"{match.group('prefix')}.{packed_name}", int(match.group("idx"))
 
 
-def load_weight(model_path: str, device: torch.device) -> Iterator[Tuple[str, torch.Tensor]]:
+def load_weight(
+    model_path: str, device: torch.device, *, dequantize_fp8: bool = False
+) -> Iterator[Tuple[str, torch.Tensor]]:
     """Streaming weight loader. Yields (name, tensor) pairs already sharded, merged,
     and on device. Peak CPU memory: one full tensor + a small merge buffer."""
     from .config import ModelConfig
@@ -86,39 +88,50 @@ def load_weight(model_path: str, device: torch.device) -> Iterator[Tuple[str, to
     # Buffer for merge groups: merged_key -> {slot: tensor}
     merge_buf: Dict[str, Dict[str, torch.Tensor]] = {}
     expert_buf: Dict[str, Dict[int, torch.Tensor]] = {}
-    for file in tqdm(files, desc="Loading weights", disable=not tp_info.is_primary()):
-        with safetensors.safe_open(file, framework="pt", device=str(device)) as f:
-            for name in f.keys():
-                # Strip multimodal wrapper prefix, skip vision/projector weights
-                if name.startswith(("vision_tower.", "multi_modal_projector.")):
-                    continue
-                raw = f.get_tensor(name)
-                name = name.removeprefix("language_model.")
-                tensor = _shard_tensor(name, raw, tp_info.rank, tp_info.size, config.num_kv_heads)
-                del raw
 
-                if (info := _get_merge_info(name)) is None:
-                    out = (name, tensor)
-                else:
-                    merged_key, slot, all_slots = info
-                    merge_buf.setdefault(merged_key, {})[slot] = tensor
-                    if not all(s in merge_buf[merged_key] for s in all_slots):
+    def tensors():
+        for file in tqdm(files, desc="Loading weights", disable=not tp_info.is_primary()):
+            with safetensors.safe_open(file, framework="pt", device=str(device)) as f:
+                for name in f.keys():
+                    if name.startswith(("vision_tower.", "multi_modal_projector.")):
                         continue
-                    parts = [merge_buf[merged_key][s] for s in all_slots]
-                    del merge_buf[merged_key]
-                    out = (merged_key, torch.cat(parts, dim=0))
+                    yield name, f.get_tensor(name)
 
-                if config.is_moe and (expert_info := _get_expert_stack_info(out[0])) is not None:
-                    packed_key, expert_idx = expert_info
-                    slots = expert_buf.setdefault(packed_key, {})
-                    slots[expert_idx] = out[1]
-                    if len(slots) != config.num_experts:
-                        continue
-                    experts = [slots[idx] for idx in range(config.num_experts)]
-                    del expert_buf[packed_key]
-                    yield packed_key, torch.stack(experts, dim=0)
-                else:  # Normal dense model
-                    yield out[0], out[1]
+    source = tensors()
+    if dequantize_fp8:
+        from minisgl.recommendation.checkpoint import checkpoint_tensors
+
+        source = checkpoint_tensors(files, device)
+    for name, raw in source:
+        # Strip multimodal wrapper prefix, skip vision/projector weights
+        if name.startswith(("vision_tower.", "multi_modal_projector.")):
+            continue
+        name = name.removeprefix("language_model.")
+        tensor = _shard_tensor(name, raw, tp_info.rank, tp_info.size, config.num_kv_heads)
+        del raw
+
+        if (info := _get_merge_info(name)) is None:
+            out = (name, tensor)
+        else:
+            merged_key, slot, all_slots = info
+            merge_buf.setdefault(merged_key, {})[slot] = tensor
+            if not all(s in merge_buf[merged_key] for s in all_slots):
+                continue
+            parts = [merge_buf[merged_key][s] for s in all_slots]
+            del merge_buf[merged_key]
+            out = (merged_key, torch.cat(parts, dim=0))
+
+        if config.is_moe and (expert_info := _get_expert_stack_info(out[0])) is not None:
+            packed_key, expert_idx = expert_info
+            slots = expert_buf.setdefault(packed_key, {})
+            slots[expert_idx] = out[1]
+            if len(slots) != config.num_experts:
+                continue
+            experts = [slots[idx] for idx in range(config.num_experts)]
+            del expert_buf[packed_key]
+            yield packed_key, torch.stack(experts, dim=0)
+        else:  # Normal dense model
+            yield out[0], out[1]
 
     assert not merge_buf, f"Incomplete merge groups in checkpoint: {list(merge_buf.keys())}"
     assert not expert_buf, f"Incomplete expert tensors in checkpoint: {list(expert_buf.keys())}"

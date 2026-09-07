@@ -29,6 +29,11 @@ class EngineConfig:
     use_pynccl: bool = True
     max_seq_len_override: int | None = None
     num_page_override: int | None = None  # if not None, will override the number of pages
+    # Dedicated recommendation runtimes may restrict the output vocabulary before capture.
+    output_token_ids: List[int] | None = None
+    quantization: str | None = None
+    kv_cache_dtype: torch.dtype | None = None
+    fused_qk_rope: bool = False
 
     @cached_property
     def hf_config(self):

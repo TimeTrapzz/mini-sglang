@@ -30,6 +30,7 @@ dependencies = [
     "pyzmq",
     "uvicorn",
     "fastapi",
+    "pydantic>=2,<3",
     "prompt_toolkit",
     "openai",
 ]
@@ -59,6 +60,9 @@ dev = [
     "matplotlib>=3.10.5",
     "pyarrow",
 ]
+
+[project.scripts]
+minisgl-rec = "minisgl.recommendation.__main__:main"
 
 [tool.uv]
 conflicts = [[{ extra = "cuda" }, { extra = "rocm" }]]

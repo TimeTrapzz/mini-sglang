@@ -57,6 +57,12 @@ class Engine:
         with torch.device("meta"), torch_dtype(config.dtype):
             self.model = create_model(config.model_config)
         self.model.load_state_dict(self._load_weight_state_dict(config))
+        if config.output_token_ids is not None:
+            self.model.lm_head.restrict(config.output_token_ids)
+        if config.quantization is not None:
+            from minisgl.recommendation.precision import quantize_model
+
+            quantize_model(self.model, config.quantization)
 
         # ======================= KV cache initialization ========================
         self.num_pages = self._determine_num_pages(init_free_memory, config)
@@ -66,8 +72,10 @@ class Engine:
             num_pages=self.num_pages + 1,  # +1 for dummy page
             page_size=config.page_size,
             device=self.device,
-            dtype=self.dtype,
+            dtype=config.kv_cache_dtype or self.dtype,
         )
+        self.kv_cache.compute_dtype = self.dtype
+        self.kv_cache.fused_qk_rope = config.fused_qk_rope
 
         # ======================= Page table initialization ========================
         # NOTE: 1. aligned to 128 bytes; 2. store raw locations instead of pages
@@ -112,7 +120,7 @@ class Engine:
             cuda_graph_max_bs=config.cuda_graph_max_bs,
             free_memory=init_free_memory,
             max_seq_len=aligned_max_seq_len,
-            vocab_size=config.model_config.vocab_size,
+            vocab_size=len(config.output_token_ids or []) or config.model_config.vocab_size,
             dummy_req=self.dummy_req,
         )
 
@@ -150,7 +158,12 @@ class Engine:
                 for k, v in self.model.state_dict().items()
             }
         else:
-            return {k: v.to(self.dtype) for k, v in load_weight(config.model_path, self.device)}
+            return {
+                k: v.to(self.dtype)
+                for k, v in load_weight(
+                    config.model_path, self.device, dequantize_fp8=config.quantization == "fp8"
+                )
+            }
 
     def _determine_num_pages(self, old_free_memory: int, config: EngineConfig) -> int:
         new_free_memory = self._sync_get_memory()[1]
@@ -159,7 +172,7 @@ class Engine:
             * config.model_config.head_dim
             * div_even(config.model_config.num_kv_heads, config.tp_info.size, allow_replicate=True)
             * config.page_size
-            * self.dtype.itemsize
+            * (config.kv_cache_dtype or self.dtype).itemsize
             * config.model_config.num_layers
         )
         num_pages = config.num_page_override

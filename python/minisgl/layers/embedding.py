@@ -43,6 +43,21 @@ class VocabParallelEmbedding(BaseOP):
 
 
 class ParallelLMHead(VocabParallelEmbedding):
+    def restrict(self, token_ids: list[int]) -> None:
+        if self.tp_size != 1:
+            raise ValueError("Restricted LM head currently requires tensor parallel size 1")
+        if not token_ids or len(set(token_ids)) != len(token_ids):
+            raise ValueError("Output token IDs must be nonempty and unique")
+        weight = (self.tied_embedding or self).weight
+        if min(token_ids) < 0 or max(token_ids) >= self.num_embeddings:
+            raise ValueError("Catalog token ID exceeds the model vocabulary")
+        ids = torch.tensor(token_ids, dtype=torch.long, device=weight.device)
+        if token_ids == list(range(token_ids[0], token_ids[0] + len(token_ids))):
+            self._restricted_weight = weight.narrow(0, token_ids[0], len(token_ids))
+        else:
+            self._restricted_weight = weight.index_select(0, ids)
+        self._restricted_bias = None if self.bias is None else self.bias.index_select(0, ids)
+
     def __init__(
         self,
         num_embeddings: int,
@@ -95,6 +110,8 @@ class ParallelLMHead(VocabParallelEmbedding):
             del indices
 
         module = self.tied_embedding or self
+        if hasattr(self, "_restricted_weight"):
+            return F.linear(x, self._restricted_weight, self._restricted_bias)
         logits = F.linear(x, module.weight, self.bias)
         if self.tp_size == 1:
             return logits

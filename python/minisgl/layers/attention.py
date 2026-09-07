@@ -46,6 +46,12 @@ class AttentionLayer(StateLessOP):
 
     def forward(self, qkv: torch.Tensor) -> torch.Tensor:
         ctx = get_global_ctx()
+        if getattr(ctx.kv_cache, "fused_qk_rope", False):
+            from minisgl.recommendation.triton_ops import qk_rope_store
+
+            q = qk_rope_store(qkv, self, ctx)
+            o = ctx.attn_backend.forward_stored(q, self.layer_id, ctx.batch)
+            return o.view(-1, self.qo_attn_dim)
         q, k, v = qkv.split([self.qo_attn_dim, self.kv_attn_dim, self.kv_attn_dim], dim=-1)
         if self.q_norm is not None:
             self.q_norm.forward_inplace(q.view(-1, self.num_qo_heads, self.head_dim))

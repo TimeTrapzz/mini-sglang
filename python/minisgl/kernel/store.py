@@ -40,6 +40,12 @@ def store_cache(
     k_cache = k_cache.view(num_tokens, -1)
     v_cache = v_cache.view(num_tokens, -1)
     if is_rocm():
+        if k_cache.element_size() == 1:
+            import torch
+
+            # index_copy does not support every FP8 dtype. Copy the existing
+            # representation byte-for-byte; conversion happens in the KV pool.
+            k_cache, v_cache, k, v = (x.view(torch.uint8) for x in (k_cache, v_cache, k, v))
         indices = indices.long()
         k_cache.index_copy_(0, indices, k.view(k.shape[0], -1))
         v_cache.index_copy_(0, indices, v.view(v.shape[0], -1))

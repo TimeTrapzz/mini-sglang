@@ -47,6 +47,10 @@ class MHAKVCache(BaseKVCachePool):
     ) -> None:
         from minisgl.kernel import store_cache
 
+        if k.dtype != self.dtype:
+            limit = torch.finfo(self.dtype).max
+            k = k.float().clamp(-limit, limit).to(self.dtype)
+            v = v.float().clamp(-limit, limit).to(self.dtype)
         store_cache(
             k_cache=self._k_buffer[layer_id].view(self._storage_shape),
             v_cache=self._v_buffer[layer_id].view(self._storage_shape),
