@@ -25,7 +25,7 @@ dependencies = [
     "accelerate",
     "msgpack",
     "modelscope",
-    "torch<2.10.0",
+    "torch",
     "transformers>=4.56.0,<=4.57.3",
     "pyzmq",
     "uvicorn",
@@ -36,6 +36,7 @@ dependencies = [
 
 [project.optional-dependencies]
 cuda = [
+    "torch<2.10.0",
     "apache-tvm-ffi>=0.1.13,<0.2",
     "flashinfer-python>=0.5.3",
     "sgl_kernel>=0.3.17.post1",
@@ -43,6 +44,7 @@ cuda = [
     "torch-c-dlpack-ext",
 ]
 rocm = [
+    "torch==2.11.0+rocm7.2",
     "amd-flashinfer==0.5.3+amd.2",
 ]
 dev = [
@@ -62,12 +64,12 @@ dev = [
 conflicts = [[{ extra = "cuda" }, { extra = "rocm" }]]
 
 [[tool.uv.index]]
-name = "amd"
-url = "https://pypi.amd.com/simple"
+name = "pytorch-rocm"
+url = "https://download.pytorch.org/whl/rocm7.2"
 explicit = true
 
 [tool.uv.sources]
-amd-flashinfer = { index = "amd" }
+torch = [{ index = "pytorch-rocm", extra = "rocm" }]
 
 [tool.setuptools]
 include-package-data = true

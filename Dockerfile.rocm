@@ -1,16 +1,24 @@
-ARG BASE_IMAGE=rocm/flashinfer:flashinfer-0.5.3.amd1_rocm7.2_ubuntu24.04_py3.12_pytorch2.9.1
+ARG BASE_IMAGE=rocm/dev-ubuntu-24.04:7.2-complete
 FROM ${BASE_IMAGE}
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3.12-venv git build-essential libstdc++-14-dev \
+    && rm -rf /var/lib/apt/lists/*
+RUN python3.12 -m venv /opt/venv
+ENV PATH=/opt/venv/bin:$PATH
+
 WORKDIR /app
+
+COPY scripts/build-amd-flashinfer.sh ./scripts/
+RUN python -m pip install --no-cache-dir 'torch==2.11.0+rocm7.2' \
+        --index-url https://download.pytorch.org/whl/rocm7.2 \
+    && bash scripts/build-amd-flashinfer.sh /wheels \
+    && python -m pip install --no-cache-dir /wheels/*.whl
 
 COPY pyproject.toml README.md ./
 COPY python/ ./python/
 
-# amd.2 fixes BF16 and GQA correctness issues in the image's amd.1 build.
-RUN python -m pip install --no-cache-dir --upgrade \
-        "amd-flashinfer==0.5.3+amd.2" \
-        --index-url https://pypi.amd.com/simple \
-    && python -m pip install --no-cache-dir -e ".[rocm]"
+RUN python -m pip install --no-cache-dir -e ".[rocm]"
 
 RUN mkdir -p /app/.cache/huggingface /app/.cache/flashinfer
 

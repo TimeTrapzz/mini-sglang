@@ -24,7 +24,7 @@ Mini-SGLang is a compact implementation of [SGLang](https://github.com/sgl-proje
 
 ## 🚀 Quick Start
 
-> **⚠️ Platform Support**: Mini-SGLang supports **Linux only**. CUDA supports x86_64 and aarch64; the initial ROCm target is x86_64 Ubuntu 24.04 with ROCm 7.2, PyTorch 2.9.1, and an AMD Instinct MI300X, MI325X, or MI355X GPU. ROCm support currently covers dense models; MoE models remain CUDA-only.
+> **⚠️ Platform Support**: Mini-SGLang supports **Linux only**. CUDA supports x86_64 and aarch64; the ROCm target is x86_64 Ubuntu 24.04 with Python 3.12, ROCm 7.2, PyTorch 2.11.0, and an AMD Instinct MI300X, MI325X, or MI355X GPU. ROCm support currently covers dense models; MoE models remain CUDA-only.
 
 ### 1. Environment Setup
 
@@ -39,30 +39,40 @@ source .venv/bin/activate
 **Prerequisites**:
 
 - **CUDA**: Install a matching NVIDIA driver and CUDA Toolkit. Check the driver with `nvidia-smi`.
-- **ROCm**: Use a ROCm-enabled PyTorch 2.9.1 environment. The provided container is the recommended setup.
+- **ROCm**: Python 3.12, PyTorch 2.11.0+rocm7.2, and the ROCm 7.2 development toolkit (including `hipcc`).
 
 ### 2. Installation
 
 Install Mini-SGLang directly from source with the extra for your accelerator:
 
 ```bash
-git clone https://github.com/sgl-project/mini-sglang.git
+git clone --branch feat/rocm https://github.com/TimeTrapzz/mini-sglang.git
 cd mini-sglang
 
 # NVIDIA CUDA
 uv venv --python=3.12 && source .venv/bin/activate
 uv pip install -e ".[cuda]"
 
-# AMD ROCm 7.2: instead, activate an existing ROCm PyTorch 2.9.1 environment.
+# AMD ROCm 7.2 (separate environment)
 # Do not install both accelerator extras in the same environment.
-python -c "import torch; assert torch.version.hip is not None"
+uv venv --python=3.12 --seed && source .venv/bin/activate
+uv pip install 'torch==2.11.0+rocm7.2' --index-url https://download.pytorch.org/whl/rocm7.2
+bash scripts/build-amd-flashinfer.sh
+uv pip install dist/amd_flashinfer-*.whl
 uv pip install -e ".[rocm]"
 ```
 
-The AMD package index for `amd-flashinfer` is configured in `pyproject.toml`. It exports the same `flashinfer` Python API used by the CUDA build. PyTorch likewise exposes HIP devices and RCCL through its existing `torch.cuda` and `nccl` compatibility APIs.
+The build script pins [amd-flashinfer 0.5.3+amd.2](https://github.com/ROCm/flashinfer/tree/d981804f78bfcde37984edc2ea4592eaab03b81c), which includes the BF16 and GQA fixes and preserves the `flashinfer` APIs used here. The newer AMD 0.6.18 release documents a ROCm 10 / Torch 2.12 stack, so it is not used for this target. The source wheel contains Python and HIP sources; kernels are JIT compiled on the target GPU. Its `py3-none-linux_x86_64` tag is upstream's packaging choice, not a precompiled CPython 3.12 HIP binary. Install the built wheel before the ROCm extra; it is not fetched from AMD's package index. PyTorch exposes HIP devices and RCCL through its existing `torch.cuda` and `nccl` compatibility APIs.
 
-ROCm support is experimental: CPU dispatch tests pass, but the container installation,
-HIP graph replay, and multi-GPU RCCL execution still require validation on AMD hardware.
+Validation: the source wheel was built with Python 3.12.13 and Torch 2.11.0+rocm7.2
+(HIP 7.2.26015); its ROCm sources and headers are present. The 11 ROCm regression
+tests pass in the CPU test environment. Full FlashInfer import requires a GPU and
+stops at device discovery on the build host. Container installation, HIP compilation,
+numerical correctness, graph replay, and multi-GPU RCCL remain unvalidated on AMD
+hardware; this combination is experimental, not an upstream-certified stack.
+
+Built wheel: `amd_flashinfer-0.5.3+amd.2-py3-none-linux_x86_64.whl` (1,246,548 bytes).
+SHA256: `5ffb263a4a45e87b0f662b6bcc0e274f70d9a36db8e961b91ea9ec71daeee821`.
 
 <details>
 <summary><b>💡 Installing CUDA on Windows (WSL2)</b></summary>
