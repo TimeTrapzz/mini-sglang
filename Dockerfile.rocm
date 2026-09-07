@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=rocm/dev-ubuntu-24.04:7.2-complete
+ARG BASE_IMAGE=rocm/dev-ubuntu-24.04:6.4-complete
 FROM ${BASE_IMAGE}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -10,8 +10,8 @@ ENV PATH=/opt/venv/bin:$PATH
 WORKDIR /app
 
 COPY scripts/build-amd-flashinfer.sh ./scripts/
-RUN python -m pip install --no-cache-dir 'torch==2.11.0+rocm7.2' \
-        --index-url https://download.pytorch.org/whl/rocm7.2 \
+RUN python -m pip install --no-cache-dir 'torch>=2.9,<2.10' \
+        --index-url https://download.pytorch.org/whl/rocm6.4 \
     && bash scripts/build-amd-flashinfer.sh /wheels \
     && python -m pip install --no-cache-dir /wheels/*.whl
 

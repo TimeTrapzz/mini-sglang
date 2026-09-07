@@ -24,7 +24,7 @@ Mini-SGLang is a compact implementation of [SGLang](https://github.com/sgl-proje
 
 ## 🚀 Quick Start
 
-> **⚠️ Platform Support**: Mini-SGLang supports **Linux only**. CUDA supports x86_64 and aarch64; the ROCm target is x86_64 Ubuntu 24.04 with Python 3.12, ROCm 7.2, PyTorch 2.11.0, and an AMD Instinct MI300X, MI325X, or MI355X GPU. ROCm support currently covers dense models; MoE models remain CUDA-only.
+> **⚠️ Platform Support**: Mini-SGLang supports **Linux only**. CUDA supports x86_64 and aarch64. The user-confirmed ROCm configuration is **Python 3.12 + PyTorch 2.9.x + ROCm 6.4 + amd-flashinfer 0.5.3+amd.2**, on **gfx942**. ROCm support currently covers dense models; MoE models remain CUDA-only.
 
 ### 1. Environment Setup
 
@@ -39,7 +39,7 @@ source .venv/bin/activate
 **Prerequisites**:
 
 - **CUDA**: Install a matching NVIDIA driver and CUDA Toolkit. Check the driver with `nvidia-smi`.
-- **ROCm**: Python 3.12, PyTorch 2.11.0+rocm7.2, and the ROCm 7.2 development toolkit (including `hipcc`).
+- **ROCm**: Python 3.12, PyTorch 2.9.x built for ROCm 6.4, and the ROCm 6.4 development toolkit (including `hipcc`).
 
 ### 2. Installation
 
@@ -53,26 +53,28 @@ cd mini-sglang
 uv venv --python=3.12 && source .venv/bin/activate
 uv pip install -e ".[cuda]"
 
-# AMD ROCm 7.2 (separate environment)
+# AMD ROCm 6.4 (separate environment)
 # Do not install both accelerator extras in the same environment.
 uv venv --python=3.12 --seed && source .venv/bin/activate
-uv pip install 'torch==2.11.0+rocm7.2' --index-url https://download.pytorch.org/whl/rocm7.2
+uv pip install 'torch>=2.9,<2.10' --index-url https://download.pytorch.org/whl/rocm6.4
 bash scripts/build-amd-flashinfer.sh
 uv pip install dist/amd_flashinfer-*.whl
 uv pip install -e ".[rocm]"
 ```
 
-The build script pins [amd-flashinfer 0.5.3+amd.2](https://github.com/ROCm/flashinfer/tree/d981804f78bfcde37984edc2ea4592eaab03b81c), which includes the BF16 and GQA fixes and preserves the `flashinfer` APIs used here. The newer AMD 0.6.18 release documents a ROCm 10 / Torch 2.12 stack, so it is not used for this target. The source wheel contains Python and HIP sources; kernels are JIT compiled on the target GPU. Its `py3-none-linux_x86_64` tag is upstream's packaging choice, not a precompiled CPython 3.12 HIP binary. Install the built wheel before the ROCm extra; it is not fetched from AMD's package index. PyTorch exposes HIP devices and RCCL through its existing `torch.cuda` and `nccl` compatibility APIs.
+If you already have the working environment above, keep it and run only
+`uv pip install -e ".[rocm]"`. The dependency range accepts both Torch 2.9.0 and
+2.9.1, so an installed 2.9.x is not forced to a different patch version.
 
-Validation: the source wheel was built with Python 3.12.13 and Torch 2.11.0+rocm7.2
-(HIP 7.2.26015); its ROCm sources and headers are present. The 11 ROCm regression
-tests pass in the CPU test environment. Full FlashInfer import requires a GPU and
-stops at device discovery on the build host. Container installation, HIP compilation,
-numerical correctness, graph replay, and multi-GPU RCCL remain unvalidated on AMD
-hardware; this combination is experimental, not an upstream-certified stack.
+For a fresh environment, the build script pins [amd-flashinfer 0.5.3+amd.2](https://github.com/ROCm/flashinfer/tree/d981804f78bfcde37984edc2ea4592eaab03b81c).
+It builds the upstream source wheel; HIP kernels JIT compile on the target GPU.
+You may instead install your existing wheel of the same version before installing
+the ROCm extra. PyTorch exposes HIP devices and RCCL through `torch.cuda` and `nccl`.
 
-Built wheel: `amd_flashinfer-0.5.3+amd.2-py3-none-linux_x86_64.whl` (1,246,548 bytes).
-SHA256: `5ffb263a4a45e87b0f662b6bcc0e274f70d9a36db8e961b91ea9ec71daeee821`.
+Validation: the user reports successful execution with the configuration above.
+The 11 CPU ROCm regression tests also pass. Container execution, numerical
+correctness across models, graph replay and multi-GPU RCCL have not been
+independently validated; this is not a production certification.
 
 <details>
 <summary><b>💡 Installing CUDA on Windows (WSL2)</b></summary>

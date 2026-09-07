@@ -7,8 +7,8 @@ import sys
 import torch
 
 assert sys.version_info[:2] == (3, 12), "Python 3.12 is required"
-assert torch.__version__ == "2.11.0+rocm7.2", torch.__version__
-assert torch.version.hip.startswith("7.2."), torch.version.hip
+assert torch.__version__.split(".")[:2] == ["2", "9"], torch.__version__
+assert torch.version.hip and torch.version.hip.startswith("6.4."), torch.version.hip
 PY
 
 python -m pip install 'scikit-build-core>=0.4.3' 'setuptools-scm>=9.2' \

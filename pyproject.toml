@@ -44,7 +44,7 @@ cuda = [
     "torch-c-dlpack-ext",
 ]
 rocm = [
-    "torch==2.11.0+rocm7.2",
+    "torch>=2.9,<2.10",
     "amd-flashinfer==0.5.3+amd.2",
 ]
 dev = [
@@ -65,7 +65,7 @@ conflicts = [[{ extra = "cuda" }, { extra = "rocm" }]]
 
 [[tool.uv.index]]
 name = "pytorch-rocm"
-url = "https://download.pytorch.org/whl/rocm7.2"
+url = "https://download.pytorch.org/whl/rocm6.4"
 explicit = true
 
 [tool.uv.sources]
